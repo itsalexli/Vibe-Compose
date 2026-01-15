@@ -2,7 +2,8 @@
 
 **Vibe Compose** is an interactive web-based music composition tool that combines the power of AI with standard ABC notation. It allows users to generate, edit, and visualize sheet music in real-time.
 
-**Click below to watch demo video**
+# Click below to watch demo video
+
 [![Watch the video](https://img.youtube.com/vi/hml_W2O7lKw/hqdefault.jpg "YouTube demo")](https://www.youtube.com/watch?v=hml_W2O7lKw)
 
 
