@@ -29,47 +29,36 @@ generation with ABC notation. Write, edit, and render sheet music in real-time.
   (pointed at DeepSeek API)
 - **Export**: `jspdf` + `html2canvas`
 
-## Layer Breakdown
+## How It Works
 
-### 1. Prompt Construction & Constraint Layer (`chatbot.tsx`)
-Before each API call, a structured prompt injects the **previous ABC output as
-context** (`prevResponse.current`), so the AI refines existing music rather than
-generating from scratch each time. The prompt enforces four hard output
-constraints: ABC notation only, auto-generate/update the `T:` header, hard-wrap
-at ≤ 8 bars per line, and valid `abcjs` syntax. Two pre-flight guards run before
-the request: an empty-input check and an env var check for
-`NEXT_PUBLIC_OPENAI_API_KEY`. The API client uses the OpenAI Node SDK with
-`baseURL` overridden to `https://api.deepseek.com`.
+### 1. Prompt Construction Layer (`chatbot.tsx`)
+Each request includes the previous ABC output as context, so the AI refines
+existing music rather than generating from scratch. The prompt enforces strict
+output constraints — valid ABC notation, correct headers, and line length limits
+— and runs basic input validation before hitting the DeepSeek API via the OpenAI
+Node SDK.
 
-### 2. Response Propagation & State Guard Layer (`page.tsx`)
-The root component manages two decoupled state values: `latestAnswer` (raw AI
-response) and `abc` (the live notation consumed by downstream components). A
-`useEffect` bridges them with a non-empty guard — `latestAnswer.trim().length >
-0` — so a blank or errored response never overwrites the editor. Both the AI
-path and the manual edit path converge on `abc`.
+### 2. State Management (`page.tsx`)
+The root component keeps the raw AI response and the live editor notation as
+separate state values. A guard prevents a blank or errored AI response from
+overwriting what's in the editor. Manual edits and AI-generated output both flow
+into the same notation state, so the rest of the app doesn't care which path
+produced it.
 
-### 3. ABC Tokenizer & Dual-Layer Editor (`ABCEditor.tsx`)
-The editor runs two absolutely-positioned layers with synchronized scroll: a
-`div` highlight layer rendered via `dangerouslySetInnerHTML`
-(`pointer-events: none`) sitting beneath a transparent `textarea`.
-`renderHighlightedContent()` does a character-level tokenization pass — lines
-0–4 (the `X:`, `T:`, `M:`, `L:`, `K:` header block) are HTML-escaped only;
-lines 5+ are tokenized against a `noteColors` lookup table that wraps notes
-`A–G` and bar lines `|` in colored `<span>` elements. Scroll sync is handled by
-passive `scroll` and `input` listeners mirroring `scrollTop`/`scrollLeft`
-between layers.
+### 3. Syntax-Highlighted Editor (`ABCEditor.tsx`)
+The editor layers a syntax-highlighted `div` beneath a transparent `textarea`,
+keeping them scroll-synced. The header lines render as plain text; everything
+below gets tokenized — notes and bar lines are each assigned a color and wrapped
+in spans. The result is a lightweight code-editor feel without pulling in a
+full editor library.
 
-### 4. abcjs Rendering & SVG Normalization Pipeline (`sheet.tsx`)
-Each `abc` change triggers a full re-render via `ABCJS.renderAbc()`, returning a
-`visualObj` used to initialize audio. A **three-pass SVG color normalization**
-then runs on the live DOM — targeting text elements, stroked paths/lines, and
-filled shapes separately — forcing everything to black regardless of theme. This
-keeps the SVG export-ready without a separate processing step. Audio playback is
-bound by passing `visualObj` directly to `SynthController.setTune()`.
+### 4. Rendering & SVG Normalization (`sheet.tsx`)
+Every notation change triggers a full re-render via `abcjs`. After rendering, a
+normalization pass forces all SVG elements to black regardless of the current
+theme, so the output is export-ready at all times. Audio playback stays in sync
+by binding directly to the same render output.
 
-### 5. PDF Export Pipeline (`ExportPDFButton.tsx`)
-Export is entirely browser-side, running five stages: SVG extraction from the
-shared `exportRef` → `XMLSerializer` serialization to a Blob URL → 3× upscale
-canvas rasterization for high-DPI output → `toDataURL("image/png", 1.0)`
-encoding → `jsPDF` assembly with `unit: "px"` and auto-orientation (`landscape`
-if `width > height`).
+### 5. PDF Export (`ExportPDFButton.tsx`)
+Export runs entirely in the browser. The rendered SVG gets serialized, rasterized
+at 3× resolution for high-DPI output, then assembled into a PDF via `jsPDF`.
+Orientation is set automatically based on the sheet dimensions.
